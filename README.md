@@ -4,6 +4,8 @@ A native macOS menu bar app that shows live GPU stats — temperature, fan,
 VRAM, power, and utilization — for a remote NVIDIA GPU, pulled over SSH and
 rendered in a click-to-open widget card.
 
+<img width="282" height="382" alt="SCR-20260910-jwal" src="https://github.com/user-attachments/assets/f8ff32f5-77b5-4846-a07e-46d20573cb72" />
+
 ## How it works
 
 - A status-bar icon (plus the current GPU temperature) sits in the macOS menu
