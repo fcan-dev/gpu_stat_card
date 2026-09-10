@@ -1,0 +1,19 @@
+# Swift / SPM
+.build/
+.swiftpm/
+*.xcodeproj
+DerivedData/
+
+# Build output
+dist/
+*.app
+
+# OS / editor
+.DS_Store
+*.swp
+*~
+
+# Local config
+config.json
+
+GPUStatCardTests/
