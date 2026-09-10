@@ -28,6 +28,17 @@ rendered in a click-to-open widget card.
 - SSH key access to a host running an NVIDIA GPU with `nvidia-smi` (configured
   in `~/.ssh/config` — e.g. your Tailscale or LAN host).
 
+## Download
+
+Prebuilt universal (Apple Silicon + Intel) binaries are on the
+[Releases](https://github.com/fcan-dev/gpu_stat_card/releases) page — download
+the `GPUStatCard-x.y.z-universal.zip`, unzip, and drag `GPUStatCard.app` to
+Applications.
+
+The app is ad-hoc signed (not notarized), so on first launch macOS will show
+an "unidentified developer" warning: right-click the app → **Open** → **Open**
+to get past it (one time only).
+
 ## Build
 
 ```sh
