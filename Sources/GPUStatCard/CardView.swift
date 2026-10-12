@@ -30,25 +30,14 @@ struct CardView: View {
         }
     }
 
-    /// A switch to flip between the two configured SSH hosts. The active
-    /// alias is emphasized; the choice is persisted to the local config.
+    /// An on/off pill switch to flip between the two configured SSH hosts.
+    /// The active alias is shown in the header subtitle; the choice is
+    /// persisted to the local config.
     private var hostToggleRow: some View {
-        HStack(spacing: 8) {
-            hostLabel(poller.hosts[0], alignment: .trailing)
-            Toggle("Switch SSH host", isOn: hostToggleBinding)
-                .labelsHidden()
-                .fixedSize()
-            hostLabel(poller.hosts[1], alignment: .leading)
-        }
-    }
-
-    private func hostLabel(_ host: String, alignment: Alignment) -> some View {
-        Text(host)
-            .font(.caption2)
-            .lineLimit(1)
-            .truncationMode(.middle)
-            .foregroundStyle(host == poller.activeHost ? .primary : .secondary)
-            .frame(maxWidth: .infinity, alignment: alignment)
+        OnOffSwitch(isOn: hostToggleBinding)
+            .frame(maxWidth: .infinity)
+            .accessibilityLabel("Switch SSH host")
+            .padding(.vertical, 2)
     }
 
     private var hostToggleBinding: Binding<Bool> {
@@ -191,6 +180,33 @@ struct CardView: View {
             Spacer()
             MenuItemButton("Quit") { NSApp.terminate(nil) }
         }
+    }
+}
+
+/// A large iOS-style on/off pill switch: green track with a white knob when
+/// on, light gray when off.
+struct OnOffSwitch: View {
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Button {
+            withAnimation(.spring(response: 0.22, dampingFraction: 0.85)) {
+                isOn.toggle()
+            }
+        } label: {
+            ZStack(alignment: isOn ? .trailing : .leading) {
+                Capsule()
+                    .fill(isOn
+                          ? Color(red: 52/255, green: 199/255, blue: 89/255)   // iOS system green
+                          : Color(white: 0.90))
+                Circle()
+                    .fill(.white)
+                    .shadow(color: .black.opacity(0.18), radius: 1, y: 0.5)
+                    .padding(2)
+            }
+        }
+        .buttonStyle(.plain)
+        .frame(width: 46, height: 28)
     }
 }
 
