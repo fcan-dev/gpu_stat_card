@@ -37,13 +37,13 @@ extension Color {
         }
     }
 
-    /// Power draw color, relative to the power limit: green below 75%,
-    /// amber 75–90%, red at or above 90%.
+    /// Power draw color, relative to the power limit: green below 60%,
+    /// amber 60–90%, red at or above 90%.
     static func power(_ fraction: Double?) -> Color {
         guard let fraction else { return .primary }
         switch fraction {
-        case ..<0.75: return .statGreen
-        case 0.75..<0.9: return .statAmber
+        case ..<0.6: return .statGreen
+        case 0.6..<0.9: return .statAmber
         default: return .statRed
         }
     }
