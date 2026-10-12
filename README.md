@@ -19,9 +19,12 @@ rendered in a click-to-open widget card.
   `ssh <host> "nvidia-smi --query-gpu=… --format=csv,noheader"` and parses the
   reply. It reuses your existing `~/.ssh/config` (user + key), so no passwords
   are needed in the app.
-- Configure two hosts and a toggle appears on the card: flip it to switch
-  which machine it polls. The choice is written back to the local config file
-  and survives relaunch.
+- Configure two hosts and a **Server Switch** row appears on the card:
+  flip it to switch which machine it polls. The last data stays visible,
+  dimmed, until the new machine answers (same look as a dropped server).
+  The choice is written back to the local config file and survives relaunch.
+  Editing `active_host` in the file directly behaves the same — it's picked
+  up on the next poll.
 - If the server drops, the dot turns red and the card keeps the last known
   sample, dimmed, with the time it went unreachable.
 

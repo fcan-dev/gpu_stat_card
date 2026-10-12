@@ -30,14 +30,34 @@ struct CardView: View {
         }
     }
 
-    /// An on/off pill switch to flip between the two configured SSH hosts.
-    /// The active alias is shown in the header subtitle; the choice is
-    /// persisted to the local config.
+    /// A "Server Switch" section: small title, the two alias names and an
+    /// on/off pill switch to flip between them. The active alias is also
+    /// shown in the header subtitle; the choice is persisted to the local
+    /// config.
     private var hostToggleRow: some View {
-        OnOffSwitch(isOn: hostToggleBinding)
-            .frame(maxWidth: .infinity)
-            .accessibilityLabel("Switch SSH host")
-            .padding(.vertical, 2)
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Server Switch")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                hostLabel(poller.hosts[0], alignment: .trailing)
+                OnOffSwitch(isOn: hostToggleBinding)
+                    .fixedSize()
+                    .accessibilityLabel("Switch SSH host")
+                hostLabel(poller.hosts[1], alignment: .leading)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func hostLabel(_ host: String, alignment: Alignment) -> some View {
+        Text(host)
+            .font(.caption2)
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .fontWeight(host == poller.activeHost ? .semibold : .regular)
+            .foregroundStyle(host == poller.activeHost ? .primary : .secondary)
+            .frame(maxWidth: .infinity, alignment: alignment)
     }
 
     private var hostToggleBinding: Binding<Bool> {
@@ -64,6 +84,7 @@ struct CardView: View {
 
     private var statusColor: Color {
         if poller.sample == nil { return .gray }
+        if poller.switching { return Color.statAmber }
         return poller.ok ? .green : .red
     }
 
@@ -75,7 +96,9 @@ struct CardView: View {
             f.dateFormat = "HH:mm:ss"
             parts.append(f.string(from: last))
         }
-        if !poller.ok { parts.append("unreachable") }
+        if !poller.ok {
+            parts.append(poller.switching ? "switching…" : "unreachable")
+        }
         return parts.joined(separator: " · ")
     }
 
@@ -136,6 +159,7 @@ struct CardView: View {
             }
             .font(.system(size: 20, weight: .bold))
             .monospacedDigit()
+            .opacity(poller.stale ? 0.55 : 1)
         }
         .frame(maxWidth: .infinity)
     }
@@ -163,8 +187,10 @@ struct CardView: View {
             Image(systemName: icon).frame(width: 18).foregroundStyle(.secondary)
             Text(label).foregroundStyle(.secondary)
             Spacer()
-            Text(poller.stale ? "—" : value)
-                .monospacedDigit().bold().foregroundStyle(valueColor)
+            Text(value)
+                .monospacedDigit().bold()
+                .foregroundStyle(poller.stale ? Color.secondary : valueColor)
+                .opacity(poller.stale ? 0.6 : 1)
         }
         .font(.system(size: 13))
         .frame(height: 22)

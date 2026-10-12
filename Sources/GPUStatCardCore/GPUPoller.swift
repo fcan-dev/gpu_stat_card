@@ -21,6 +21,9 @@ public final class GPUPoller {
     public private(set) var lastUpdated: Date?
     public private(set) var lastError: String?
     public private(set) var stale: Bool = false
+    /// True while a host switch is in progress: the card keeps the last
+    /// sample dimmed until the new host answers.
+    public private(set) var switching: Bool = false
     public private(set) var configNote: String?
     /// The SSH destinations from the config (the card's toggle switches these).
     public private(set) var hosts: [String]
@@ -98,11 +101,17 @@ public final class GPUPoller {
 
         hostGeneration &+= 1
         activeHost = host
-        sample = nil
-        ok = false
-        stale = false
-        lastError = nil
+        beginSwitch()
         Task { [weak self] in await self?.pollOnce() }
+    }
+
+    /// Marks a switch as in progress: the previous machine's last sample is
+    /// kept (dimmed via `stale`) instead of blanking the card.
+    private func beginSwitch() {
+        switching = true
+        stale = true
+        ok = false
+        lastError = nil
     }
 
     /// Runs one poll synchronously (SSH on a detached task) and updates state.
@@ -113,6 +122,11 @@ public final class GPUPoller {
 
         let generation = hostGeneration
         let cfg = configProvider()
+        if cfg.activeHost != activeHost {
+            // The host changed via a config-file edit — treat it like a
+            // toggle switch (dim the last data while the new host is hit).
+            beginSwitch()
+        }
         lastUpdated = Date()
 
         let args = Self.makeArgs(host: cfg.host)
@@ -133,6 +147,7 @@ public final class GPUPoller {
         activeHost = cfg.activeHost
         configNote = cfg.note
 
+        switching = false
         if result.timedOut || result.status != 0 {
             ok = false
             stale = true
