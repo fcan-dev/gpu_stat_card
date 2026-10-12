@@ -56,6 +56,22 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual((raw?["refresh_seconds"] as? NSNumber)?.intValue, 8)
     }
 
+    func testCommaJoinedHostEntry_isSplitIntoSeparateHostsAndFileSelfHeals() {
+        // Users often write "a,b" as one entry; a valid SSH destination
+        // never contains a comma, so split it and heal the file.
+        writeJSON([
+            "hosts": ["alpha, beta"],
+            "active_host": "alpha",
+            "refresh_seconds": 5,
+        ])
+        let cfg = Config.load(at: configURL)
+        XCTAssertEqual(cfg.hosts, ["alpha", "beta"])
+        XCTAssertEqual(cfg.activeHost, "alpha")
+        let raw = (try? JSONSerialization.jsonObject(
+            with: Data(contentsOf: configURL))) as? [String: Any]
+        XCTAssertEqual(raw?["hosts"] as? [String], ["alpha", "beta"])
+    }
+
     func testActiveHostNotInHosts_fallsBackToFirstHost() {
         writeJSON([
             "hosts": ["alpha", "beta"],

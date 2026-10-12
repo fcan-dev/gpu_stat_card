@@ -50,15 +50,20 @@ public struct Config: Equatable {
                           note: "Config at \(url.path) is invalid; using default host.")
         }
 
-        let fileHosts = (obj["hosts"] as? [String] ?? []).filter { !$0.isEmpty }
+        let rawHosts = obj["hosts"] as? [String] ?? []
         let legacyHost = obj["host"] as? String
-        let hosts: [String]
-        if !fileHosts.isEmpty {
-            hosts = fileHosts
+        let original: [String]
+        if !rawHosts.isEmpty {
+            original = rawHosts
         } else if let legacyHost, !legacyHost.isEmpty {
             // Legacy single-`host` schema — accept it.
-            hosts = [legacyHost]
+            original = [legacyHost]
         } else {
+            return Config(host: defaultHost, refreshSeconds: defaultRefresh,
+                          note: "Config at \(url.path) is invalid; using default host.")
+        }
+        let hosts = splitHosts(original)
+        guard !hosts.isEmpty else {
             return Config(host: defaultHost, refreshSeconds: defaultRefresh,
                           note: "Config at \(url.path) is invalid; using default host.")
         }
@@ -68,11 +73,25 @@ public struct Config: Equatable {
         let cfg = Config(hosts: hosts, activeHost: obj["active_host"] as? String,
                          refreshSeconds: refresh)
 
-        // One-time migration: rewrite legacy `host`-only files to the new schema.
-        if legacyHost != nil && (obj["hosts"] as? [String]) == nil {
+        // Self-heal: rewrite when the on-disk form needed normalization
+        // (e.g. a comma-joined "a,b" entry) or is the legacy `host` schema.
+        if hosts != original || (obj["hosts"] as? [String]) == nil {
             write(cfg, to: url)
         }
         return cfg
+    }
+
+    /// Splits comma-joined host entries ("a,b" → ["a", "b"]) and trims
+    /// whitespace — a valid SSH destination never contains a comma.
+    private static func splitHosts(_ raw: [String]) -> [String] {
+        var result: [String] = []
+        for entry in raw {
+            for part in entry.components(separatedBy: ",") {
+                let trimmed = part.trimmingCharacters(in: .whitespaces)
+                if !trimmed.isEmpty { result.append(trimmed) }
+            }
+        }
+        return result
     }
 
     public static func write(_ config: Config, to url: URL = defaultConfigURL) {
