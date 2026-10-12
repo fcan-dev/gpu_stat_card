@@ -1,20 +1,35 @@
 import Foundation
 
 public struct Config: Equatable {
-    public var host: String
+    /// The SSH destinations the card can switch between (shown by the toggle).
+    public var hosts: [String]
+    /// The host currently polled.
+    public var activeHost: String
     public var refreshSeconds: Int
     /// Non-nil when the file was auto-created or was invalid (shown in the card).
     public var note: String?
 
-    public init(host: String, refreshSeconds: Int, note: String? = nil) {
-        self.host = host
+    /// Convenience for code that polls a single destination.
+    public var host: String { activeHost }
+
+    public init(hosts: [String], activeHost: String? = nil,
+                refreshSeconds: Int, note: String? = nil) {
+        self.hosts = hosts
+        self.activeHost = activeHost.flatMap { hosts.contains($0) ? $0 : nil }
+            ?? hosts.first ?? Config.defaultHost
         self.refreshSeconds = refreshSeconds
         self.note = note
+    }
+
+    /// Legacy single-host initializer (pre-toggle configs).
+    public init(host: String, refreshSeconds: Int, note: String? = nil) {
+        self.init(hosts: [host], activeHost: host, refreshSeconds: refreshSeconds, note: note)
     }
 
     public static let defaultHost = "gpu-server"
     public static let defaultRefresh = 5
 
+    /// Lives in the user's home dir — local to the machine, never part of the repo.
     public static let defaultConfigURL: URL =
         FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".config/gpu-stat-card/config.json")
@@ -25,25 +40,49 @@ public struct Config: Equatable {
     public static func load(at url: URL = defaultConfigURL) -> Config {
         if !FileManager.default.fileExists(atPath: url.path) {
             let def = Config(host: defaultHost, refreshSeconds: defaultRefresh,
-                             note: "Created default config at \(url.path). Edit it to change the SSH host.")
+                             note: "Created default config at \(url.path). Edit it to change the SSH hosts.")
             write(def, to: url)
             return def
         }
         guard let data = try? Data(contentsOf: url),
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let host = obj["host"] as? String, !host.isEmpty else {
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return Config(host: defaultHost, refreshSeconds: defaultRefresh,
                           note: "Config at \(url.path) is invalid; using default host.")
         }
+
+        let fileHosts = (obj["hosts"] as? [String] ?? []).filter { !$0.isEmpty }
+        let legacyHost = obj["host"] as? String
+        let hosts: [String]
+        if !fileHosts.isEmpty {
+            hosts = fileHosts
+        } else if let legacyHost, !legacyHost.isEmpty {
+            // Legacy single-`host` schema — accept it.
+            hosts = [legacyHost]
+        } else {
+            return Config(host: defaultHost, refreshSeconds: defaultRefresh,
+                          note: "Config at \(url.path) is invalid; using default host.")
+        }
+
         let rawRefresh = (obj["refresh_seconds"] as? NSNumber)?.intValue ?? defaultRefresh
         let refresh = min(max(rawRefresh, minRefresh), maxRefresh)
-        return Config(host: host, refreshSeconds: refresh, note: nil)
+        let cfg = Config(hosts: hosts, activeHost: obj["active_host"] as? String,
+                         refreshSeconds: refresh)
+
+        // One-time migration: rewrite legacy `host`-only files to the new schema.
+        if legacyHost != nil && (obj["hosts"] as? [String]) == nil {
+            write(cfg, to: url)
+        }
+        return cfg
     }
 
     public static func write(_ config: Config, to url: URL = defaultConfigURL) {
         guard let dir = url.deletingLastPathComponent() as URL? else { return }
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let dict: [String: Any] = ["host": config.host, "refresh_seconds": config.refreshSeconds]
+        let dict: [String: Any] = [
+            "hosts": config.hosts,
+            "active_host": config.activeHost,
+            "refresh_seconds": config.refreshSeconds,
+        ]
         guard let data = try? JSONSerialization.data(withJSONObject: dict,
                                                      options: [.prettyPrinted, .sortedKeys]) else { return }
         try? data.write(to: url)

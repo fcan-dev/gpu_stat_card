@@ -14,5 +14,10 @@ let package = Package(
             dependencies: ["GPUStatCardCore"],
             path: "Sources/GPUStatCard"
         ),
+        .testTarget(
+            name: "GPUStatCardTests",
+            dependencies: ["GPUStatCardCore"],
+            path: "Tests/GPUStatCardTests"
+        ),
     ]
 )

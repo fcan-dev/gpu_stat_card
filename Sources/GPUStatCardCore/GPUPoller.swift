@@ -22,23 +22,50 @@ public final class GPUPoller {
     public private(set) var lastError: String?
     public private(set) var stale: Bool = false
     public private(set) var configNote: String?
+    /// The SSH destinations from the config (the card's toggle switches these).
+    public private(set) var hosts: [String]
+    /// The SSH destination currently polled.
+    public private(set) var activeHost: String
+
+    /// Position of `activeHost` in `hosts` (the toggle's switch state).
+    public var activeIndex: Int { hosts.firstIndex(of: activeHost) ?? 0 }
+
+    private var hostGeneration = 0
+    private var pollInFlight = false
 
     /// Fixed `nvidia-smi` query; passed as a single ssh command argument.
     public static let query =
         "nvidia-smi --query-gpu=name,temperature.gpu,fan.speed,memory.used,memory.total,power.draw,power.limit,utilization.gpu --format=csv,noheader"
 
+    private let configURL: URL
     private let configProvider: @Sendable () -> Config
     private let timeout: TimeInterval
     private let runCommand: @Sendable ([String], TimeInterval) throws -> CommandResult
     private var task: Task<Void, Never>?
 
-    public init(configProvider: @escaping @Sendable () -> Config = { Config.load() },
+    public convenience init(configURL: URL = Config.defaultConfigURL,
+                            timeout: TimeInterval = 10,
+                            runCommand: @escaping @Sendable ([String], TimeInterval) throws -> CommandResult =
+                                { try GPUPoller.defaultRun(args: $0, timeout: $1) }) {
+        self.init(configURL: configURL,
+                  configProvider: { Config.load(at: configURL) },
+                  timeout: timeout,
+                  runCommand: runCommand)
+    }
+
+    public init(configURL: URL = Config.defaultConfigURL,
+                configProvider: @escaping @Sendable () -> Config = { Config.load() },
                 timeout: TimeInterval = 10,
                 runCommand: @escaping @Sendable ([String], TimeInterval) throws -> CommandResult =
                     { try GPUPoller.defaultRun(args: $0, timeout: $1) }) {
+        self.configURL = configURL
         self.configProvider = configProvider
         self.timeout = timeout
         self.runCommand = runCommand
+        let initial = configProvider()
+        self.hosts = initial.hosts
+        self.activeHost = initial.host
+        self.configNote = initial.note
     }
 
     /// Starts the polling loop (idempotent).
@@ -58,10 +85,34 @@ public final class GPUPoller {
         task = nil
     }
 
+    /// Switches the polled host: persists the choice to the local config file
+    /// (survives relaunch), clears the previous machine's sample, and polls
+    /// the new host immediately (skipped if a poll is already in flight — the
+    /// poll loop picks the new host up on its next iteration then).
+    public func selectHost(_ host: String) {
+        guard hosts.contains(host), host != activeHost else { return }
+        var cfg = Config.load(at: configURL)
+        guard cfg.hosts.contains(host) else { return }
+        cfg.activeHost = host
+        Config.write(cfg, to: configURL)
+
+        hostGeneration &+= 1
+        activeHost = host
+        sample = nil
+        ok = false
+        stale = false
+        lastError = nil
+        Task { [weak self] in await self?.pollOnce() }
+    }
+
     /// Runs one poll synchronously (SSH on a detached task) and updates state.
     public func pollOnce() async {
+        guard !pollInFlight else { return }
+        pollInFlight = true
+        defer { pollInFlight = false }
+
+        let generation = hostGeneration
         let cfg = configProvider()
-        configNote = cfg.note
         lastUpdated = Date()
 
         let args = Self.makeArgs(host: cfg.host)
@@ -73,6 +124,14 @@ public final class GPUPoller {
         } catch {
             result = CommandResult(stdout: "", status: -1, timedOut: false)
         }
+
+        // A host switch happened while this poll was in flight: the result
+        // belongs to the previous machine, so discard it entirely.
+        guard generation == hostGeneration else { return }
+
+        hosts = cfg.hosts
+        activeHost = cfg.activeHost
+        configNote = cfg.note
 
         if result.timedOut || result.status != 0 {
             ok = false

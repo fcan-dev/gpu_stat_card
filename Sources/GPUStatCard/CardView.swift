@@ -18,6 +18,9 @@ struct CardView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             HairlineDivider()
+            if poller.hosts.count >= 2 {
+                hostToggleRow
+            }
             footer
         }
         .padding(14)
@@ -25,6 +28,34 @@ struct CardView: View {
         .onHover { inside in
             interaction.insidePopover = inside
         }
+    }
+
+    /// A switch to flip between the two configured SSH hosts. The active
+    /// alias is emphasized; the choice is persisted to the local config.
+    private var hostToggleRow: some View {
+        HStack(spacing: 8) {
+            hostLabel(poller.hosts[0], alignment: .trailing)
+            Toggle("Switch SSH host", isOn: hostToggleBinding)
+                .labelsHidden()
+                .fixedSize()
+            hostLabel(poller.hosts[1], alignment: .leading)
+        }
+    }
+
+    private func hostLabel(_ host: String, alignment: Alignment) -> some View {
+        Text(host)
+            .font(.caption2)
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .foregroundStyle(host == poller.activeHost ? .primary : .secondary)
+            .frame(maxWidth: .infinity, alignment: alignment)
+    }
+
+    private var hostToggleBinding: Binding<Bool> {
+        Binding(
+            get: { poller.activeIndex == 1 },
+            set: { on in poller.selectHost(poller.hosts[on ? 1 : 0]) }
+        )
     }
 
     private var header: some View {
@@ -49,7 +80,7 @@ struct CardView: View {
 
     private var subtitle: String {
         var parts: [String] = []
-        parts.append(Config.load().host)
+        parts.append(poller.activeHost)
         if let last = poller.lastUpdated {
             let f = DateFormatter()
             f.dateFormat = "HH:mm:ss"
@@ -88,7 +119,7 @@ struct CardView: View {
             Label("Waiting for GPU data…", systemImage: "hourglass")
                 .font(.callout).foregroundStyle(.secondary)
         } else {
-            Label("Contacting \(Config.load().host)…", systemImage: "arrow.triangle.2.circlepath")
+            Label("Contacting \(poller.activeHost)…", systemImage: "arrow.triangle.2.circlepath")
                 .font(.callout).foregroundStyle(.secondary)
         }
     }

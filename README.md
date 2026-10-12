@@ -19,6 +19,9 @@ rendered in a click-to-open widget card.
   `ssh <host> "nvidia-smi --query-gpu=… --format=csv,noheader"` and parses the
   reply. It reuses your existing `~/.ssh/config` (user + key), so no passwords
   are needed in the app.
+- Configure two hosts and a toggle appears on the card: flip it to switch
+  which machine it polls. The choice is written back to the local config file
+  and survives relaunch.
 - If the server drops, the dot turns red and the card keeps the last known
   sample, dimmed, with the time it went unreachable.
 
@@ -54,19 +57,26 @@ swift run GPUStatCard
 
 ## Config
 
-`GPUStatCard` reads `~/.config/gpu-stat-card/config.json`. It's auto-created
-with defaults on first run:
+`GPUStatCard` reads `~/.config/gpu-stat-card/config.json` — local to your user
+account, never part of this repo. It's auto-created with defaults on first run:
 
 ```json
 {
-  "host" : "gpu-server",
-  "refresh_seconds" : 5
+  "hosts": ["gpu-server"],
+  "active_host": "gpu-server",
+  "refresh_seconds": 5
 }
 ```
 
-- `host` — any SSH destination that works with your `~/.ssh/config`
-  (e.g. `gpu-server` or `user@10.0.0.5`).
+- `hosts` — one or two SSH destinations that work with your `~/.ssh/config`
+  (e.g. `my-gpu-tailscale`, or `user@10.0.0.5`).
+  With two entries, a toggle on the card switches between them.
+- `active_host` — which host to poll. The card's toggle updates it, and it's
+  remembered across relaunches.
 - `refresh_seconds` — poll interval (clamped to 2–60).
+
+Older configs with a single `host` key still work and are migrated to this
+format automatically on next load. With just one host the toggle stays hidden.
 
 The file is re-read every poll, so editing it retargets the app live — no
 restart needed. Use the card's **Edit Config** button to open it.
